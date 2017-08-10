@@ -50,6 +50,9 @@ class auth_plugin_saml2 extends auth_plugin_base {
         'spmetadatasign'  => true,
         'showidplink'     => true,
         'alterlogout'     => '',
+        'entityid_pers' => '',
+        'baseurl' => '',
+        'unidad_academica' => ''
     );
 
     /**
@@ -287,10 +290,38 @@ class auth_plugin_saml2 extends auth_plugin_base {
 
         $attributes = $auth->getAttributes();
 
+		//UNLP atributos del sso para verificar la ua y nro_inscripcion
+        //print_r($attributes);
+        $guarani_data = $attributes["guarani_data"][0];
+        $guarani_data = json_decode($guarani_data);
+        $ok=false;
+
+
+		if ($guarani_data->codigo) {
+                $guarani_uas = $guarani_data->datos;
+                foreach ($guarani_uas as $ua) {
+                        if ($ua->unidad_academica == $this->config->unidad_academica) {
+                                $ok=true; 
+                                $nro_inscripcion = $ua->nro_inscripcion;
+                                break;
+                        }
+                }
+
+        }
+        else {
+         echo $this->error_page(get_string('no_data','auth_saml2_extendido')); 
+        }
+
+        
+
         $attr = $this->config->idpattr;
-        if (empty($attributes[$attr]) ) {
+        /* No se controla si no se configuro un atributo para matchear, ya que solo se podria matchear con el nro_inscripcion dentro de guarani_data[x]
+         * if (empty($attributes[$attr]) ) {
             $this->error_page(get_string('noattribute', 'auth_saml2', $attr));
         }
+        */
+
+
 
         $user = null;
         foreach ($attributes[$attr] as $key => $uid) {
@@ -302,6 +333,9 @@ class auth_plugin_saml2 extends auth_plugin_base {
                 continue;
             }
         }
+
+		/* obtener por nro_inscripcion */
+        $user = $DB->get_record('user', array( 'idnumber' => $nro_inscripcion, 'deleted' => 0 ));
 
         // Prevent access to users who are suspended
         if ($user->suspended) {
