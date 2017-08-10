@@ -22,7 +22,7 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-$string['pluginname'] = 'SAML2';
+$string['pluginname'] = 'SAML2 UNLP';
 $string['auth_saml2description'] = 'Authenticate with a SAML2 IdP';
 $string['autocreate'] = 'Auto create users';
 $string['autocreate_help'] = 'If users are in the IdP but not in moodle create a moodle account.';
