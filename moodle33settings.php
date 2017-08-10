@@ -170,6 +170,27 @@ if ($ADMIN->fulltree) {
             get_string('sspversion', 'auth_saml2'),
             $authplugin->get_ssp_version()
             ));
+            
+    $settings->add(new admin_setting_configtext(
+            'auth_saml2/entityid_pers',
+            get_string('entityid_pers', 'auth_saml2'),
+            get_string('entityid_pers_help', 'auth_saml2'),
+            '',
+            PARAM_URL));
+            
+    $settings->add(new admin_setting_configtext(
+            'auth_saml2/baseurl',
+            get_string('baseurl', 'auth_saml2'),
+            get_string('baseurl_help', 'auth_saml2'),
+            '',
+            PARAM_URL));
+            
+    $settings->add(new admin_setting_configtext(
+            'auth_saml2/unidad_academica',
+            get_string('unidad_academica', 'auth_saml2'),
+            get_string('unidad_academica_help', 'auth_saml2'),
+            '',
+            PARAM_URL));        
 
 
     // Display locking / mapping of profile fields.
