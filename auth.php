@@ -350,7 +350,7 @@ class auth_plugin_saml2 extends auth_plugin_base {
                 $newuser = true;
             } else {
                 $this->log(__FUNCTION__ . " user '$uid' is not in moodle so error");
-                $this->error_page(get_string('nouser', 'auth_saml2', $uid));
+                $this->error_page(get_string('nouser_unlp', 'auth_saml2', $uid));
             }
         } else {
             // Make sure all user data is fetched.

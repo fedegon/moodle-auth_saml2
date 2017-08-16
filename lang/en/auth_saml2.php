@@ -102,3 +102,7 @@ $string['baseurl_help'] = 'Base URL';
 $string['unidad_academica_help'] = 'Código de Unidad Academica';
 
 $string['no_data'] = 'No hemos podido identificarte como alumno';
+
+
+$string['nouser_unlp'] = "Iniciaste sesión correctamente pero tu cuenta no está asociada a Moodle con los datos de la Facultad";
+
