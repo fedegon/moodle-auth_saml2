@@ -22,7 +22,7 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-$string['pluginname'] = 'SAML2';
+$string['pluginname'] = 'SAML2 UNLP';
 $string['auth_saml2description'] = 'Authenticate with a SAML2 IdP';
 $string['autocreate'] = 'Auto create users';
 $string['autocreate_help'] = 'If users are in the IdP but not in moodle create a moodle account.';
@@ -93,14 +93,12 @@ $string['alterlogout'] = 'Alternative Logout URL';
 $string['alterlogout_help'] = 'The URL to redirect a user after all internal logout mechanisms are run';
 
 
-
 $string['entityid_pers'] = 'Entity ID';
 $string['baseurl'] = 'Base URL';
 $string['unidad_academica'] = 'Unidad Academica';
-
 $string['entityid_pers_help'] = 'Entity ID';
 $string['baseurl_help'] = 'Base URL';
-
 $string['unidad_academica_help'] = 'Código de Unidad Academica';
-
 $string['no_data'] = 'No hemos podido identificarte como alumno';
+$string['nouser_unlp'] = "Iniciaste sesión correctamente pero tu cuenta no está asociada a Moodle con los datos de la Facultad";
+
