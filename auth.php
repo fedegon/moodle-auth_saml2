@@ -274,18 +274,16 @@ class auth_plugin_saml2 extends auth_plugin_base {
     /**
      * All the checking happens before the login page in this hook
      */
-     public function saml_login() {
+  public function saml_login() {
         // @codingStandardsIgnoreStart
-        global $CFG, $DB, $USER, $SESSION, $PAGE, $saml2auth;
+        global $CFG, $DB, $USER, $SESSION, $saml2auth;
         // @codingStandardsIgnoreEnd
         require_once('setup.php');
         require_once("$CFG->dirroot/login/lib.php");
         $auth = new SimpleSAML_Auth_Simple($this->spname);
         $auth->requireAuth();
-        $context = context_system::instance();
-        $PAGE->set_context($context);
         $attributes = $auth->getAttributes();
-		//UNLP atributos del sso para verificar la ua y nro_inscripcion
+        //UNLP atributos del sso para verificar la ua y nro_inscripcion
         //print_r($attributes);
         $guarani_data = $attributes["guarani_data"][0];
         $guarani_data = json_decode($guarani_data);
@@ -310,6 +308,7 @@ class auth_plugin_saml2 extends auth_plugin_base {
             $this->error_page(get_string('noattribute', 'auth_saml2', $attr));
         }
         */
+
         $user = null;
         foreach ($attributes[$attr] as $key => $uid) {
             if ($this->config->tolower) {
@@ -320,13 +319,10 @@ class auth_plugin_saml2 extends auth_plugin_base {
                 continue;
             }
         }
-		/* obtener por nro_inscripcion */
-        $user = $DB->get_record('user', array( 'idnumber' => $nro_inscripcion, 'deleted' => 0 ));
-        // Prevent access to users who are suspended
-        if ($user->suspended) {
-            $this->error_page(get_string('suspendeduser', 'auth_saml2', $uid));
-        }
         $newuser = false;
+        /* obtener por nro_inscripcion */
+        $user = $DB->get_record('user', array( 'idnumber' => $nro_inscripcion, 'deleted' => 0 ));
+        
         if (!$user) {
             if ($this->config->autocreate) {
                 $this->log(__FUNCTION__ . " user '$uid' is not in moodle so autocreating");
@@ -337,6 +333,10 @@ class auth_plugin_saml2 extends auth_plugin_base {
                 $this->error_page(get_string('nouser_unlp', 'auth_saml2', $uid));
             }
         } else {
+            // Prevent access to users who are suspended.
+            if ($user->suspended) {
+                $this->error_page(get_string('suspendeduser', 'auth_saml2', $uid));
+            }
             // Make sure all user data is fetched.
             $user = get_complete_user_data('username', $user->username);
             $this->log(__FUNCTION__ . ' found user '.$user->username);
@@ -365,6 +365,7 @@ class auth_plugin_saml2 extends auth_plugin_base {
         }
         return;
     }
+
 
     /**
      * Checks the field map config for values that update onlogin or when a new user is created
