@@ -274,29 +274,22 @@ class auth_plugin_saml2 extends auth_plugin_base {
     /**
      * All the checking happens before the login page in this hook
      */
-    public function saml_login() {
-
+     public function saml_login() {
         // @codingStandardsIgnoreStart
         global $CFG, $DB, $USER, $SESSION, $PAGE, $saml2auth;
         // @codingStandardsIgnoreEnd
-
         require_once('setup.php');
         require_once("$CFG->dirroot/login/lib.php");
         $auth = new SimpleSAML_Auth_Simple($this->spname);
         $auth->requireAuth();
-
         $context = context_system::instance();
         $PAGE->set_context($context);
-
         $attributes = $auth->getAttributes();
-
 		//UNLP atributos del sso para verificar la ua y nro_inscripcion
         //print_r($attributes);
         $guarani_data = $attributes["guarani_data"][0];
         $guarani_data = json_decode($guarani_data);
         $ok=false;
-
-
 		if ($guarani_data->codigo) {
                 $guarani_uas = $guarani_data->datos;
                 foreach ($guarani_uas as $ua) {
@@ -306,23 +299,17 @@ class auth_plugin_saml2 extends auth_plugin_base {
                                 break;
                         }
                 }
-
         }
         else {
          echo $this->error_page(get_string('no_data','auth_saml2_extendido')); 
         }
-
         
-
         $attr = $this->config->idpattr;
         /* No se controla si no se configuro un atributo para matchear, ya que solo se podria matchear con el nro_inscripcion dentro de guarani_data[x]
          * if (empty($attributes[$attr]) ) {
             $this->error_page(get_string('noattribute', 'auth_saml2', $attr));
         }
         */
-
-
-
         $user = null;
         foreach ($attributes[$attr] as $key => $uid) {
             if ($this->config->tolower) {
@@ -333,15 +320,12 @@ class auth_plugin_saml2 extends auth_plugin_base {
                 continue;
             }
         }
-
 		/* obtener por nro_inscripcion */
         $user = $DB->get_record('user', array( 'idnumber' => $nro_inscripcion, 'deleted' => 0 ));
-
-        // Prevent access to users who are suspended.
+        // Prevent access to users who are suspended
         if ($user->suspended) {
             $this->error_page(get_string('suspendeduser', 'auth_saml2', $uid));
         }
-
         $newuser = false;
         if (!$user) {
             if ($this->config->autocreate) {
@@ -350,31 +334,26 @@ class auth_plugin_saml2 extends auth_plugin_base {
                 $newuser = true;
             } else {
                 $this->log(__FUNCTION__ . " user '$uid' is not in moodle so error");
-                $this->error_page(get_string('nouser', 'auth_saml2', $uid));
+                $this->error_page(get_string('nouser_unlp', 'auth_saml2', $uid));
             }
         } else {
             // Make sure all user data is fetched.
             $user = get_complete_user_data('username', $user->username);
             $this->log(__FUNCTION__ . ' found user '.$user->username);
         }
-
         // Do we need to update any user fields? Unlike ldap, we can only do
         // this now. We cannot query the IdP at any time.
         $this->update_user_profile_fields($user, $attributes, $newuser);
-
         if (!$this->config->anyauth && $user->auth != 'saml2') {
             $this->log(__FUNCTION__ . " user $uid is auth type: $user->auth");
             $this->error_page(get_string('wrongauth', 'auth_saml2', $uid));
         }
-
         // Make sure all user data is fetched.
         $user = get_complete_user_data('username', $user->username);
-
         complete_user_login($user);
         $USER->loggedin = true;
         $USER->site = $CFG->wwwroot;
         set_moodle_cookie($USER->username);
-
         $urltogo = core_login_get_return_url();
         // If we are not on the page we want, then redirect to it.
         if ( qualified_me() !== $urltogo ) {
@@ -384,7 +363,6 @@ class auth_plugin_saml2 extends auth_plugin_base {
         } else {
             $this->log(__FUNCTION__ . " continuing onto " . qualified_me() );
         }
-
         return;
     }
 
