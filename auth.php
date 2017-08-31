@@ -309,7 +309,7 @@ class auth_plugin_saml2 extends auth_plugin_base {
 
         }
         else {
-         echo $this->error_page(get_string('no_data','auth_saml2_extendido')); 
+         echo $this->error_page(get_string('no_data','auth_saml2')); 
         }
 
         
