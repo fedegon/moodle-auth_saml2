@@ -21,6 +21,8 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use auth_saml2\admin\saml2_settings;
+
 defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir.'/authlib.php');
 
@@ -37,11 +39,12 @@ class auth_plugin_saml2 extends auth_plugin_base {
      */
     public $defaults = array(
         'idpname'         => '',
-        'entityid'        => '',
         'idpdefaultname'  => '', // Set in constructor.
         'idpmetadata'     => '',
+        'idpmduinames'    => '',
+        'idpentityids'    => '',
         'debug'           => 0,
-        'duallogin'       => 1,
+        'duallogin'       => saml2_settings::OPTION_DUAL_LOGIN_YES,
         'anyauth'         => 1,
         'idpattr'         => 'uid',
         'mdlattr'         => 'username',
@@ -52,7 +55,11 @@ class auth_plugin_saml2 extends auth_plugin_base {
         'alterlogout'     => '',
         'entityid_pers' => '',
         'baseurl' => '',
-        'unidad_academica' => ''
+        'unidad_academica' => '',
+        'idpmetadatarefresh' => 0,
+        'logtofile'       => 0,
+        'logdir'          => '/tmp/',
+        'nameidasattrib'  => 0,
     );
 
     /**
@@ -67,7 +74,17 @@ class auth_plugin_saml2 extends auth_plugin_base {
         $this->certdir = "$CFG->dataroot/saml2/";
         $this->certpem = $this->certdir . $this->spname . '.pem';
         $this->certcrt = $this->certdir . $this->spname . '.crt';
-        $this->config = (object) array_merge($this->defaults, (array) get_config('auth/saml2') );
+        $this->config = (object) array_merge($this->defaults, (array) get_config('auth_saml2') );
+
+        // Parsed IdP metadata, either a list of IdP metadata urls or a single XML blob.
+        $parser = new \auth_saml2\idp_parser();
+        $this->idplist = $parser->parse($this->config->idpmetadata);
+
+        // MDUINames provided by the metadata.
+        $this->idpmduinames = (array) json_decode($this->config->idpmduinames);
+
+        // EntitiyIDs provded by the metadata.
+        $this->idpentityids = (array) json_decode($this->config->idpentityids);
     }
 
     /**
@@ -92,8 +109,10 @@ class auth_plugin_saml2 extends auth_plugin_base {
      * @return array of IdP's
      */
     public function loginpage_idp_list($wantsurl) {
+        $conf = $this->config;
+
         // If we have disabled the visibility of the idp link, return with an empty array right away.
-        if (!$this->config->showidplink) {
+        if (!$conf->showidplink) {
             return array();
         }
 
@@ -102,21 +121,68 @@ class auth_plugin_saml2 extends auth_plugin_base {
             return array();
         }
 
-        // The wants url may already be routed via login.php so don't re-re-route it.
-        if (strpos($wantsurl, '/auth/saml2/login.php')) {
-            $wantsurl = new moodle_url($wantsurl);
-        } else {
-            $wantsurl = new moodle_url('/auth/saml2/login.php', array('wants' => $wantsurl));
+        // The array of IdPs to return.
+        $idplist = [];
+
+        foreach ($this->idplist as $idp) {
+            if (!array_key_exists($idp->idpurl, $this->idpentityids)) {
+                $message = "Missing identity configuration for '{$idp->idpurl}': " .
+                           'Please check/save SAML2 configuration or if able to inspect the database, check: ' .
+                           "SELECT value FROM {config_plugins} WHERE plugin='auth_saml2' AND name='idpentityids' " .
+                           '-- Remember to purge caches if you make changes in the database.';
+                debugging($message);
+                continue;
+            }
+
+            $params = [
+                'wants' => $wantsurl,
+                'idp' => md5($this->idpentityids[$idp->idpurl]),
+            ];
+
+            // The wants url may already be routed via login.php so don't re-re-route it.
+            if (strpos($wantsurl, '/auth/saml2/login.php')) {
+                $idpurl = new moodle_url($wantsurl);
+            } else {
+                $idpurl = new moodle_url('/auth/saml2/login.php', $params);
+            }
+            $idpurl->param('passive', 'off');
+
+            // A default icon.
+            $idpicon = new pix_icon('i/user', 'Login');
+
+            // Initially use the default name. This is suitable for a single IdP.
+            $idpname = $conf->idpdefaultname;
+
+            // When multiple IdPs are configured, use a different default based on the IdP.
+            if (count($this->idplist) > 1) {
+                $host = parse_url($idp->idpurl, PHP_URL_HOST);
+                $idpname = get_string('idpnamedefault_varaible', 'auth_saml2', $host);
+            }
+
+            // Use a forced override set in the idpmetadata field.
+            if (!empty($idp->idpname)) {
+                $idpname = $idp->idpname;
+            } else {
+                // There is no forced override, try to use the <mdui:DisplayName> if it exists.
+                if (!empty($this->idpmduinames[$idp->idpurl])) {
+                    $idpname = $this->idpmduinames[$idp->idpurl];
+                }
+            }
+
+            // Has the IdP label override been set in the admin configuration?
+            // This is best used with a single IdP. Multiple IdP overrides are different.
+            if (!empty($conf->idpname)) {
+                $idpname = $conf->idpname;
+            }
+
+            $idplist[] = [
+                'url'  => $idpurl,
+                'icon' => $idpicon,
+                'name' => $idpname,
+            ];
         }
 
-        $conf = $this->config;
-        return array(
-            array(
-                'url'  => $wantsurl,
-                'icon' => new pix_icon('i/user', 'Login'),
-                'name' => (!empty($conf->idpname) ? $conf->idpname : $conf->idpdefaultname),
-            ),
-        );
+        return $idplist;
     }
 
     /**
@@ -146,10 +212,13 @@ class auth_plugin_saml2 extends auth_plugin_base {
             return false;
         }
 
-        $file = $this->certdir . 'idp.xml';
-        if (!file_exists($file)) {
-            $this->log(__FUNCTION__ . ' file not found, ' . $file);
-            return false;
+        $eids = $this->idpentityids;
+        foreach ($eids as $entityid) {
+            $file = $this->certdir . md5($entityid) . '.idp.xml';
+            if (!file_exists($file)) {
+                $this->log(__FUNCTION__ . ' file not found, ' . $file);
+                return false;
+            }
         }
 
         return true;
@@ -161,11 +230,11 @@ class auth_plugin_saml2 extends auth_plugin_base {
      * @param string $msg The error message.
      */
     public function error_page($msg) {
-        global $PAGE, $OUTPUT, $SITE;
+        global $PAGE, $OUTPUT;
 
         $logouturl = new moodle_url('/auth/saml2/logout.php');
 
-        $PAGE->set_course($SITE);
+        $PAGE->set_context(context_system::instance());
         $PAGE->set_url('/');
         echo $OUTPUT->header();
         echo $OUTPUT->box($msg);
@@ -225,10 +294,29 @@ class auth_plugin_saml2 extends auth_plugin_base {
 
         $this->log(__FUNCTION__ . ' enter');
 
-        $saml = optional_param('saml', 0, PARAM_BOOL);
+        $saml = optional_param('saml', null, PARAM_BOOL);
+
+        // Never redirect on POST.
+        if (isset($_SERVER['REQUEST_METHOD']) && ($_SERVER['REQUEST_METHOD'] == 'POST')) {
+            $this->log(__FUNCTION__ . ' skipping due to method=post');
+            return false;
+        }
+
+        // Never redirect if requested so.
+        if ($saml === 0) {
+            $SESSION->saml = $saml;
+            $this->log(__FUNCTION__ . ' skipping due to saml=off parameter');
+            return false;
+        }
+
+        // Never redirect if has error.
+        if (!empty($_GET['SimpleSAML_Auth_State_exceptionId'])) {
+            $this->log(__FUNCTION__ . ' skipping due to SimpleSAML_Auth_State_exceptionId');
+            return false;
+        }
 
         // If dual auth then stop and show login page.
-        if ($this->config->duallogin == 1 && $saml == 0) {
+        if ($this->config->duallogin == saml2_settings::OPTION_DUAL_LOGIN_YES && $saml == 0) {
             $this->log(__FUNCTION__ . ' skipping due to dual auth');
             return false;
         }
@@ -236,6 +324,12 @@ class auth_plugin_saml2 extends auth_plugin_base {
         // If ?saml=on even when duallogin is on, go directly to IdP.
         if ($saml == 1) {
             $this->log(__FUNCTION__ . ' redirecting due to query param ?saml=on');
+            return true;
+        }
+
+        // If passive mode always redirect, except if saml=off. It will redirect back to login page.
+        if ($this->config->duallogin == saml2_settings::OPTION_DUAL_LOGIN_PASSIVE) {
+            $this->log(__FUNCTION__ . ' redirecting due to passive mode.');
             return true;
         }
 
@@ -277,17 +371,34 @@ class auth_plugin_saml2 extends auth_plugin_base {
     public function saml_login() {
 
         // @codingStandardsIgnoreStart
-        global $CFG, $DB, $USER, $SESSION, $PAGE, $saml2auth;
+        global $CFG, $DB, $USER, $SESSION, $saml2auth;
         // @codingStandardsIgnoreEnd
 
-        require_once('setup.php');
+        require('setup.php');
         require_once("$CFG->dirroot/login/lib.php");
-        $auth = new SimpleSAML_Auth_Simple($this->spname);
-        $auth->requireAuth();
 
-        $context = context_system::instance();
-        $PAGE->set_context($context);
+        // Set the default IdP to be the first in the list. Used when dual login is disabled.
+        $arr = array_reverse($saml2auth->idpentityids);
+        $idp = md5(array_pop($arr));
 
+        // Specify the default IdP to use.
+        $SESSION->saml2idp = $idp;
+
+        // We store the IdP in the session to generate the config/config.php array with the default local SP.
+        if (isset($_GET['idp'])) {
+            $SESSION->saml2idp = $_GET['idp'];
+        }
+
+        $auth = new \SimpleSAML\Auth\Simple($this->spname);
+
+        $passive = $this->config->duallogin == saml2_settings::OPTION_DUAL_LOGIN_PASSIVE;
+        $passive = (bool)optional_param('passive', $passive, PARAM_BOOL);
+        $params = ['isPassive' => $passive];
+        if ($passive) {
+            $params['ErrorURL'] = "{$CFG->wwwroot}/login/index.php";
+        }
+
+        $auth->requireAuth($params);
         $attributes = $auth->getAttributes();
 
 		//UNLP atributos del sso para verificar la ua y nro_inscripcion
@@ -321,7 +432,7 @@ class auth_plugin_saml2 extends auth_plugin_base {
         }
         */
 
-
+		
 
         $user = null;
         foreach ($attributes[$attr] as $key => $uid) {
@@ -333,6 +444,7 @@ class auth_plugin_saml2 extends auth_plugin_base {
                 continue;
             }
         }
+
 
 		/* obtener por nro_inscripcion */
         $user = $DB->get_record('user', array( 'idnumber' => $nro_inscripcion, 'deleted' => 0 ));
@@ -347,12 +459,23 @@ class auth_plugin_saml2 extends auth_plugin_base {
             if ($this->config->autocreate) {
                 $this->log(__FUNCTION__ . " user '$uid' is not in moodle so autocreating");
                 $user = create_user_record($uid, '', 'saml2');
+                if ($ok) 
+                {
+					$user->idnumber=$nro_inscripcion;
+					user_update_user($user, false, false);
+					// Save custom profile fields.
+					profile_save_data($user); 
+				}
                 $newuser = true;
             } else {
                 $this->log(__FUNCTION__ . " user '$uid' is not in moodle so error");
                 $this->error_page(get_string('nouser_unlp', 'auth_saml2', $uid));
             }
         } else {
+            // Prevent access to users who are suspended.
+            if ($user->suspended) {
+                $this->error_page(get_string('suspendeduser', 'auth_saml2', $uid));
+            }
             // Make sure all user data is fetched.
             $user = get_complete_user_data('username', $user->username);
             $this->log(__FUNCTION__ . ' found user '.$user->username);
@@ -396,10 +519,10 @@ class auth_plugin_saml2 extends auth_plugin_base {
      * @param bool $newuser
      * @return bool true on success
      */
-    public function update_user_profile_fields(&$user, $attributes, $newuser = false) {
+    public function update_user_profile_fields(&$user, $attributes, $newuser = false,$idnumber=null) {
         global $CFG;
 
-        $mapconfig = get_config('auth/saml2');
+        $mapconfig = get_config('auth_saml2');
         $allkeys = array_keys(get_object_vars($mapconfig));
         $update = false;
 
@@ -419,6 +542,9 @@ class auth_plugin_saml2 extends auth_plugin_base {
                                 $user->$field = $attributes[$attr][0];
                                 $update = true;
                             }
+                            if ($idnumber) { 
+								$user->idnumber = $idnumber;
+								}
                         }
                     }
                 }
@@ -427,6 +553,11 @@ class auth_plugin_saml2 extends auth_plugin_base {
 
         if ($update) {
             require_once($CFG->dirroot . '/user/lib.php');
+            if ($user->description === true) {
+                // Function get_complete_user_data() sets description = true to avoid keeping in memory.
+                // If set to true - don't update based on data from this call.
+                unset($user->description);
+            }
             user_update_user($user, false, false);
             // Save custom profile fields.
             profile_save_data($user);
@@ -439,23 +570,30 @@ class auth_plugin_saml2 extends auth_plugin_base {
      * Make sure we also cleanup the SAML session AND log out of the IdP
      */
     public function logoutpage_hook() {
-
         // This is a little tricky, there are 3 sessions we need to logout:
         //
         // 1) The moodle session.
         // 2) The SimpleSAML SP session.
         // 3) The IdP session, if the IdP supports SingleSignout.
 
-        global $CFG, $saml2auth, $redirect;
+        global $SESSION, $redirect;
+
+        // Lets capture the saml2idp hash.
+        $idp = $this->spname;
+        if (!empty($SESSION->saml2idp)) {
+            $idp = $SESSION->saml2idp;
+        }
 
         $this->log(__FUNCTION__ . ' Do moodle logout');
-
         // Do the normal moodle logout first as we may redirect away before it
         // gets called by the normal core process.
         require_logout();
 
-        require_once('setup.php');
-        $auth = new SimpleSAML_Auth_Simple($this->spname);
+        require('setup.php');
+
+        // Woah there, we lost the session data, lets restore the IdP.
+        $SESSION->saml2idp = $idp;
+        $auth = new \SimpleSAML\Auth\Simple($this->spname);
 
         // Only log out of the IdP if we logged in via the IdP. TODO check session timeouts.
         if ($auth->isAuthenticated()) {
@@ -470,104 +608,24 @@ class auth_plugin_saml2 extends auth_plugin_base {
     }
 
     /**
-     * Returns false regardless of the username and password as we never get
-     * to the web form. If we do, some other auth plugin will handle it
-     *
-     * @param string $username The username
-     * @param string $password The password
-     * @return bool Authentication success or failure.
+     * {@inheritdoc}
      */
-    public function user_login ($username, $password) {
+    public function user_login($username, $password) {
         return false;
-    }
-
-    /**
-     * Prints a form for configuring this authentication plugin.
-     *
-     * This function is called from admin/auth.php, and outputs a full page with
-     * a form for configuring this plugin.
-     *
-     * @param object $config
-     * @param object $err
-     * @param array $userfields
-     */
-    public function config_form($config, $err, $userfields) {
-        $config = (object) array_merge($this->defaults, (array) $config );
-        global $CFG, $OUTPUT;
-        include($CFG->dirroot.'/auth/saml2/settings.html');
-    }
-
-    /**
-     * A chance to validate form data, and last chance to
-     * do stuff before it is inserted in config_plugin
-     *
-     * @param object $form with submitted configuration settings (without system magic quotes)
-     * @param array $err array of error messages
-     *
-     * @return array of any errors
-     */
-    public function validate_form($form, &$err) {
-
-        global $CFG, $saml2auth;
-        require_once('setup.php');
-
-        // The IdP entityID needs to be parsed out of the XML.
-        // It will use the first IdP entityID it finds.
-        $form->entityid = '';
-        $form->idpdefaultname = $this->defaults['idpdefaultname'];
-        try {
-            $rawxml = $form->idpmetadata;
-
-            // If rawxml looks like a url, then go scrape it first.
-            if (substr($rawxml, 0, 8) == 'https://' ||
-                substr($rawxml, 0, 7) == 'http://') {
-                $rawxml = @file_get_contents($rawxml);
-
-                if (!$rawxml) {
-                    $err['idpmetadata'] = get_string('idpmetadata_badurl', 'auth_saml2');
-                    return;
-                }
-            }
-
-            $xml = new SimpleXMLElement($rawxml);
-            $xml->registerXPathNamespace('md',   'urn:oasis:names:tc:SAML:2.0:metadata');
-            $xml->registerXPathNamespace('mdui', 'urn:oasis:names:tc:SAML:metadata:ui');
-
-            // Find all IDPSSODescriptor elements and then work back up to the entityID.
-            $idps = $xml->xpath('//md:EntityDescriptor[//md:IDPSSODescriptor]');
-            if ($idps && isset($idps[0])) {
-                $form->entityid = (string)$idps[0]->attributes('', true)->entityID[0];
-
-                $names = @$idps[0]->xpath('//mdui:DisplayName');
-                if ($names && isset($names[0])) {
-                    $form->idpdefaultname = (string)$names[0];
-                }
-            }
-
-            if (empty($form->entityid)) {
-                $err['idpmetadata'] = get_string('idpmetadata_noentityid', 'auth_saml2');
-            } else {
-                if (!file_exists($saml2auth->certdir)) {
-                    mkdir($saml2auth->certdir);
-                }
-                file_put_contents($saml2auth->certdir . 'idp.xml' , $rawxml);
-            }
-        } catch (Exception $e) {
-            $err['idpmetadata'] = get_string('idpmetadata_invalid', 'auth_saml2');
-        }
     }
 
     /**
      * Processes and stores configuration data for this authentication plugin.
      *
      * @param object $config
+     * @return boolean
      */
     public function process_config($config) {
         $haschanged = false;
 
-        foreach ($this->defaults as $key => $value) {
+        foreach (array_keys($this->defaults) as $key) {
             if ($config->$key != $this->config->$key) {
-                set_config($key, $config->$key, 'auth/saml2');
+                set_config($key, $config->$key, 'auth_saml2');
                 $haschanged = true;
             }
         }
@@ -586,12 +644,23 @@ class auth_plugin_saml2 extends auth_plugin_base {
         include('tester.php');
     }
 
+    /**
+     * Returns the version of SSP that this plugin is using.
+     *
+     * @return string
+     */
     public function get_ssp_version() {
-        global $CFG, $saml2auth;
-        require_once('setup.php');
+        require('setup.php');
         $config = new SimpleSAML_Configuration(array(), '');
         return $config->getVersion();
     }
 
+    /**
+     * Allow saml2 auth method to be manually set for users e.g. bulk uploading users.
+     */
+
+    public function can_be_manually_set() {
+        return true;
+    }
 }
 

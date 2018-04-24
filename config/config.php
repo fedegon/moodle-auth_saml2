@@ -22,6 +22,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+defined('MOODLE_INTERNAL') || die();
+
 global $CFG, $saml2auth;
 
 // Check for https login.
@@ -30,12 +32,22 @@ if (!empty($CFG->loginhttps)) {
     $wwwroot = str_replace('http:', 'https:', $CFG->wwwroot);
 }
 
+$metadatasources = [];
+foreach ($saml2auth->idpentityids as $source => $entity) {
+    $metadatasources[] = [
+        'type' => 'xml',
+        'file' => "$CFG->dataroot/saml2/" . md5($entity) . ".idp.xml"
+    ];
+}
+
 $config = array(
     'baseurlpath'       => ($saml2auth->config->baseurl)?$saml2auth->config->baseurl:$wwwroot . '/auth/saml2/sp/',
     'certdir'           => $saml2auth->certdir,
     'debug'             => $saml2auth->config->debug ? true : false,
-    'logging.level'     => $saml2auth->config->debug ? SimpleSAML_Logger::DEBUG : SimpleSAML_Logger::ERR,
-    'logging.handler'   => 'errorlog',
+    'logging.level'     => $saml2auth->config->debug ? SimpleSAML\Logger::DEBUG : SimpleSAML\Logger::ERR,
+    'logging.handler'   => $saml2auth->config->logtofile ? 'file' : 'errorlog',
+    'loggingdir'        => $saml2auth->config->logdir,
+    'logging.logfile'   => 'simplesamlphp.log',
     'showerrors'        => $CFG->debugdisplay ? true : false,
     'errorreporting'    => false,
     'debug.validatexml' => false,
@@ -49,8 +61,9 @@ $config = array(
     'session.datastore.timeout' => 60 * 60 * 4,
     'session.state.timeout'     => 60 * 60,
 
-    'session.cookie.name'     => 'SimpleSAMLSessionID',
-    'session.cookie.path'     => '/', // TODO restrict to moodle path.
+    'session.authtoken.cookiename'  => 'MDL_SSP_AuthToken',
+    'session.cookie.name'     => 'MDL_SSP_SessID',
+    'session.cookie.path'     => $CFG->sessioncookiepath,
     'session.cookie.domain'   => null,
     'session.cookie.secure'   => !empty($CFG->cookiesecure),
     'session.cookie.lifetime' => 0,
@@ -59,19 +72,15 @@ $config = array(
     'session.phpsession.savepath'   => null,
     'session.phpsession.httponly'   => true,
 
-    'session.authtoken.cookiename'  => 'SimpleSAMLAuthToken',
-
     'enable.http_post' => false,
 
     'metadata.sign.enable'          => $saml2auth->config->spmetadatasign ? true : false,
     'metadata.sign.certificate'     => $saml2auth->certcrt,
     'metadata.sign.privatekey'      => $saml2auth->certpem,
     'metadata.sign.privatekey_pass' => get_site_identifier(),
-    'metadata.sources' => array(
-        array('type' => 'xml', 'file' => "$CFG->dataroot/saml2/idp.xml"),
-    ),
+    'metadata.sources'              => $metadatasources,
 
-    'store.type' => '\\auth_saml2\\store',
+    'store.type' => !empty($CFG->auth_saml2_store) ? $CFG->auth_saml2_store : '\\auth_saml2\\store',
 
     'proxy' => null, // TODO inherit from moodle conf see http://moodle.local/admin/settings.php?section=http for more.
 

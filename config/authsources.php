@@ -22,7 +22,9 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-global $saml2auth, $CFG, $SITE;
+defined('MOODLE_INTERNAL') || die();
+
+global $saml2auth, $CFG, $SITE, $SESSION;
 
 // Check for https login.
 $wwwroot = $CFG->wwwroot;
@@ -30,27 +32,61 @@ if (!empty($CFG->loginhttps)) {
     $wwwroot = str_replace('http:', 'https:', $CFG->wwwroot);
 }
 
-$config = array(
-    $saml2auth->spname => array(
-        'saml:SP',
-        'entityID' => ($saml2auth->config->entityid_pers)?$saml2auth->config->entityid_pers:"$wwwroot/auth/saml2/sp/metadata.php",
-        'idp' => $saml2auth->config->entityid,
-        'NameIDPolicy' => null,
-        'OrganizationName' => array(
-            'en' => $SITE->shortname,
-        ),
-        'OrganizationDisplayName' => array(
-            'en' => $SITE->fullname,
-        ),
-        'OrganizationURL' => array(
-            'en' => $CFG->wwwroot,
-        ),
-        'privatekey' => $saml2auth->spname . '.pem',
-        'privatekey_pass' => get_site_identifier(),
-        'certificate' => $saml2auth->spname . '.crt',
-        'sign.logout' => true,
-        'redirect.sign' => true,
-        'signature.algorithm' => 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
 
+$config = [];
+
+
+// Case for specifying no $SESSION IdP, select the first configured IdP as the default.
+$arr = array_reverse($saml2auth->idpentityids);
+$idp = array_pop($arr);
+
+if (!empty($SESSION->saml2idp)) {
+    foreach ($saml2auth->idpentityids as $idpentityid) {
+        if ($SESSION->saml2idp === md5($idpentityid)) {
+            $idp = $idpentityid;
+            break;
+        }
+    }
+}
+
+// The testing tool will set the IdP that it uses.
+if (!empty($SESSION->saml2testidp)) {
+    $idp = $SESSION->saml2testidp;
+}
+
+$config[$saml2auth->spname] = [
+    'saml:SP',
+    //'entityID' => "$wwwroot/auth/saml2/sp/metadata.php",
+    'entityID' => ($saml2auth->config->entityid_pers)?$saml2auth->config->entityid_pers:"$wwwroot/auth/saml2/sp/metadata.php",
+    'discoURL' => !empty($CFG->auth_saml2_disco_url) ? $CFG->auth_saml2_disco_url : null,
+    'idp' => empty($CFG->auth_saml2_disco_url) ? $idp : null, // 'idp' => $saml2auth->config->entityid, estaba anteriormente
+    'NameIDPolicy' => $saml2auth->config->nameidpolicy,
+    'OrganizationName' => array(
+        'en' => $SITE->shortname,
     ),
-);
+    'OrganizationDisplayName' => array(
+        'en' => $SITE->fullname,
+    ),
+    'OrganizationURL' => array(
+        'en' => $CFG->wwwroot,
+    ),
+    'privatekey' => $saml2auth->spname . '.pem',
+    'privatekey_pass' => get_site_identifier(),
+    'certificate' => $saml2auth->spname . '.crt',
+    'sign.logout' => true,
+    'redirect.sign' => true,
+    'signature.algorithm' => 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+];
+
+/*
+ * If we're configured to expose the nameid as an attribute, set this authproc filter up
+ * the nameid value appears under the attribute "nameid"
+ */
+if ($saml2auth->config->nameidasattrib) {
+    $config[$saml2auth->spname]['authproc'] = array(
+        20 => array(
+            'class' => 'saml:NameIDAttribute',
+            'format' => '%V',
+        ),
+    );
+}
