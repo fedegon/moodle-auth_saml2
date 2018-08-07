@@ -243,6 +243,19 @@ if ($ADMIN->fulltree) {
             get_string('unidad_academica_help', 'auth_saml2'),
             '',
             PARAM_TEXT)); 
+    $settings->add(new admin_setting_configtext(
+            'auth_saml2/api_url_guarani',
+            get_string('api_url_guarani', 'auth_saml2'),
+            get_string('api_url_guarani', 'auth_saml2'),
+            '',
+            PARAM_TEXT)); 
+    $settings->add(new admin_setting_configtext(
+            'auth_saml2/token_api_url_guarani',
+            get_string('token_api_url_guarani', 'auth_saml2'),
+            get_string('token_api_url_guarani', 'auth_saml2'),
+            '',
+            PARAM_TEXT)); 
+
     // Display locking / mapping of profile fields.
     $help = get_string('auth_updatelocal_expl', 'auth');
     $help .= get_string('auth_fieldlock_expl', 'auth');

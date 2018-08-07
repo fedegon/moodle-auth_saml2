@@ -56,6 +56,8 @@ class auth_plugin_saml2 extends auth_plugin_base {
         'entityid_pers' => '',
         'baseurl' => '',
         'unidad_academica' => '',
+        'api_url_guarani' => '',
+        'token_api_url_guarani' => '',
         'idpmetadatarefresh' => 0,
         'logtofile'       => 0,
         'logdir'          => '/tmp/',
@@ -365,6 +367,26 @@ class auth_plugin_saml2 extends auth_plugin_base {
         return true;
     }
 
+	public function getDataFromService($url,$token,$unidad_academica,$dni_type, $dni_number)
+	{
+		//funcion propia UNLP
+		$options = array(
+			'http'=>array(
+			'method'=>"GET",
+			'header'=>"Authorization: {$token}\r\n"
+			)
+		);
+		$context = stream_context_create($options);
+		$url = "{$url}/{$unidad_academica}/{$dni_type}/{$dni_number}";
+		$page = file_get_contents($url,false,$context);
+		return ($page!==FALSE)? json_decode($page) : $page ;
+  }
+  
+  public function person_to_doc($person) {
+	    $person = json_decode($person);
+		return array($person->document_type_id,$person->document_number);
+  }
+
     /**
      * All the checking happens before the login page in this hook
      */
@@ -402,31 +424,35 @@ class auth_plugin_saml2 extends auth_plugin_base {
         $attributes = $auth->getAttributes();
 
 		//UNLP atributos del sso para verificar la ua y nro_inscripcion
-        //print_r($attributes);
-        $guarani_data = $attributes["guarani_data"][0];
-        $guarani_data = json_decode($guarani_data);
+
+        list($tipo_doc,$nro_doc) = $this->person_to_doc($attributes["person"][0]);
+        //nuevo llamado a la API
+		$guarani_data = $this->getDataFromService($this->config->api_url_guarani,
+												$this->config->token_api_url_guarani,
+												$this->config->unidad_academica,
+												$tipo_doc,
+												$nro_doc);
+												
+		if ($guarani_data === FALSE) { $this->error_page(get_string('api_error','auth_saml2')); }
         $ok=false;
-
-
-		if ($guarani_data->codigo) {
-                $guarani_uas = $guarani_data->datos;
-                foreach ($guarani_uas as $ua) {
-                        if ($ua->unidad_academica == $this->config->unidad_academica) {
-                                $ok=true; 
-                                $nro_inscripcion = $ua->nro_inscripcion;
-                                break;
-                        }
-                }
-
-        }
+		if ($guarani_data->codigo > 0) {
+                $guarani_ua = $guarani_data->datos;
+                if ($guarani_ua->nro_inscripcion == NULL) { 
+					$this->error_page(get_string('no_data_guarani','auth_saml2'));
+				}
+                else { 
+					$nro_inscripcion = $guarani_ua->nro_inscripcion; 
+					$ok=true;
+				}
+                             
+        }    
         else {
          echo $this->error_page(get_string('no_data','auth_saml2')); 
         }
 
-        
 
         $attr = $this->config->idpattr;
-        /* No se controla si no se configuro un atributo para matchear, ya que solo se podria matchear con el nro_inscripcion dentro de guarani_data[x]
+        /* No se controla si no se configuro un atributo para matchear, ya que solo se podria matchear con el nro_inscripcion dentro de los datos de guarani
          * if (empty($attributes[$attr]) ) {
             $this->error_page(get_string('noattribute', 'auth_saml2', $attr));
         }
@@ -458,9 +484,9 @@ class auth_plugin_saml2 extends auth_plugin_base {
         if (!$user) {
             if ($this->config->autocreate) {
                 $this->log(__FUNCTION__ . " user '$uid' is not in moodle so autocreating");
-                $user = create_user_record($uid, '', 'saml2');
                 if ($ok) 
                 {
+					$user = create_user_record($uid, '', 'saml2');
 					$user->idnumber=$nro_inscripcion;
 					user_update_user($user, false, false);
 					// Save custom profile fields.
