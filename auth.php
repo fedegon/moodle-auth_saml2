@@ -65,7 +65,7 @@ class auth_plugin_saml2 extends auth_plugin_base {
         'unidad_academica' => '',
         'api_url_guarani' => '',
         'token_api_url_guarani' => '',
-    )
+    );
 
     /**
      * Constructor.
