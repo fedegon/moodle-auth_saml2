@@ -28,6 +28,9 @@ $string['anyauth_help'] = 'Yes: Allow SAML login for all users? No: Only users w
 $string['auth_saml2description'] = 'Authenticate with a SAML2 IdP';
 $string['autocreate'] = 'Auto create users';
 $string['autocreate_help'] = 'If users are in the IdP but not in moodle create a moodle account.';
+$string['availableidps'] = 'Select available IdPs';
+$string['availableidps_help'] = 'If an IdP metadata xml contains multiple IdP entities, you will need to select which entities are availiable
+for users to login with.';
 $string['certificatedetails'] = 'Certificate details';
 $string['certificatedetailshelp'] = '<h1>SAML2 auto generated public certificate contents</h1><p>The path for the cert is here:</p>';
 $string['certificate_help'] = 'Regenerate the Private Key and Certificate used by this SP. | <a href=\'{$a}\'>View SP certificate</a>';
@@ -51,7 +54,7 @@ $string['exception'] = 'SAML2 exception: {$a}';
 $string['expirydays'] = 'Expiry in Days';
 $string['idpattr_help'] = 'Which IdP attribute should be matched against a Moodle user field?';
 $string['idpattr'] = 'Mapping IdP';
-$string['idpmetadata_badurl'] = 'The url didn\'t return any data';
+$string['idpmetadata_badurl'] = 'Invalid metadata at {$a}';
 $string['idpmetadata_help'] = 'To use multiple IdPs enter each public metadata url on a new line.<br/>To override a name, place text before the http. eg. "Forced IdP Name http://ssp.local/simplesaml/saml2/idp/metadata.php"';
 $string['idpmetadata'] = 'IdP metadata xml OR public xml URL';
 $string['idpmetadata_invalid'] = 'The IdP XML isn\'t valid';
@@ -73,6 +76,10 @@ $string['mdlattr'] = 'Mapping Moodle';
 $string['metadatafetchfailed'] = 'Metadata fetch failed: {$a}';
 $string['metadatafetchfailedstatus'] = 'Metadata fetch failed: Status code {$a}';
 $string['metadatafetchfailedunknown'] = 'Metadata fetch failed: Unknown cURL error';
+$string['multiidpbuttons'] = 'Buttons with icons';
+$string['multiidpdisplay'] = 'Multiple IdP display type';
+$string['multiidpdisplay_help'] = 'If an IdP metadata xml contains multiple IdP entities, how will each available IdP be displayed?';
+$string['multiidpdropdown'] = 'Drop-down list';
 $string['nameidasattrib'] = 'Expose NameID as attribute';
 $string['nameidasattrib_help'] = 'The NameID claim will be exposed to SSPHP as an attribute named nameid';
 $string['noattribute'] = 'You have logged in succesfully but we could not find your \'{$a}\' attribute to associate you to an account in Moodle.';
@@ -84,6 +91,7 @@ $string['organizationname'] = 'Organisation';
 $string['passivemode'] = 'Passive mode';
 $string['pluginname'] = 'SAML2 UNLP';
 $string['regenerate_submit'] = 'Regenerate';
+$string['rememberidp'] = 'Remember login service';
 $string['required'] = 'This field is required';
 $string['requireint'] = 'This field is required and needs to be a positive integer';
 $string['showidplink'] = 'Display IdP link';
@@ -153,3 +161,21 @@ $string['phone1'] = 'Phone';
 $string['phone2'] = 'Mobile phone';
 $string['nameidpolicy'] = 'NameID Policy';
 $string['nameidpolicy_help'] = '';
+
+
+
+/*
+ * Privacy provider (GDPR)
+ */
+$string["privacy:no_data_reason"] = "The Saml2 authentication plugin does not store any personal data.";
+
+/*
+ * Signing Algorithm
+ */
+$string['sha1'] = 'Legacy SHA1 (Dangerous)';
+$string['sha256'] = 'SHA256';
+$string['sha384'] = 'SHA384';
+$string['sha512'] = 'SHA512';
+$string['signaturealgorithm'] = 'Signing Algorithm';
+$string['signaturealgorithm_help'] = 'This is the algorithm that will be used to sign SAML requests. Warning: The SHA1 Algorithm is only provided for backwards compatibility, unless you absolutely must use it it is recommended to avoid it and use at least SHA256 instead.';
+

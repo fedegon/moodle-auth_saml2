@@ -22,6 +22,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+ use auth_saml2\ssl_algorithms;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG, $saml2auth;
@@ -34,6 +36,14 @@ if (!empty($CFG->loginhttps)) {
 
 $metadatasources = [];
 foreach ($saml2auth->idpentityids as $source => $entity) {
+    if (is_object($entity)) {
+        $entity = (array)$entity;
+    }
+    if (is_array($entity)) {
+        $entity = array_keys($entity);
+        $entity = implode("\n", $entity);
+    }
+
     $metadatasources[] = [
         'type' => 'xml',
         'file' => "$CFG->dataroot/saml2/" . md5($entity) . ".idp.xml"
@@ -41,8 +51,11 @@ foreach ($saml2auth->idpentityids as $source => $entity) {
 }
 
 $config = array(
+
     'baseurlpath'       => ($saml2auth->config->baseurl)?$saml2auth->config->baseurl:$wwwroot . '/auth/saml2/sp/',
-    'certdir'           => $saml2auth->certdir,
+    //'certdir'           => $saml2auth->certdir,
+    //'baseurlpath'       => $wwwroot . '/auth/saml2/sp/',
+    'certdir'           => $saml2auth->get_saml2_directory() . '/',
     'debug'             => $saml2auth->config->debug ? true : false,
     'logging.level'     => $saml2auth->config->debug ? SimpleSAML\Logger::DEBUG : SimpleSAML\Logger::ERR,
     'logging.handler'   => $saml2auth->config->logtofile ? 'file' : 'errorlog',
@@ -73,6 +86,8 @@ $config = array(
     'session.phpsession.httponly'   => true,
 
     'enable.http_post' => false,
+
+    'signature.algorithm' => !empty($saml2auth->config->signaturealgorithm) ? $saml2auth->config->signaturealgorithm : ssl_algorithms::get_default_saml_signature_algorithm(),
 
     'metadata.sign.enable'          => $saml2auth->config->spmetadatasign ? true : false,
     'metadata.sign.certificate'     => $saml2auth->certcrt,

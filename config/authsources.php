@@ -22,6 +22,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use auth_saml2\ssl_signing_algorithm;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $saml2auth, $CFG, $SITE, $SESSION;
@@ -40,8 +42,29 @@ $config = [];
 $arr = array_reverse($saml2auth->idpentityids);
 $idp = array_pop($arr);
 
+// If metadata entry has multiple IdPs we take the first active one as the default.
+if (!is_string($idp)) {
+    $subidps = (array)$idp;
+    foreach ($subidps as $subidp => $active) {
+        if ((bool)$active) {
+            $idp = $subidp;
+            break;
+        }
+    }
+}
+
 if (!empty($SESSION->saml2idp)) {
     foreach ($saml2auth->idpentityids as $idpentityid) {
+        if (!is_string($idpentityid)) {
+            $subidps = (array)$idpentityid;
+            foreach ($subidps as $subidp => $active) {
+                if ($SESSION->saml2idp === md5($subidp)) {
+                    $idp = $subidp;
+                    break 2;
+                }
+            }
+        }
+
         if ($SESSION->saml2idp === md5($idpentityid)) {
             $idp = $idpentityid;
             break;
@@ -75,7 +98,7 @@ $config[$saml2auth->spname] = [
     'certificate' => $saml2auth->spname . '.crt',
     'sign.logout' => true,
     'redirect.sign' => true,
-    'signature.algorithm' => 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+    'signature.algorithm' => $saml2auth->config->signaturealgorithm,
 ];
 
 /*

@@ -23,14 +23,15 @@
  */
 
 use auth_saml2\admin\saml2_settings;
+use auth_saml2\admin\setting_button;
+use auth_saml2\admin\setting_textonly;
+use auth_saml2\ssl_algorithms;
 
 defined('MOODLE_INTERNAL') || die;
 
 global $CFG;
 
 if ($ADMIN->fulltree) {
-    require_once($CFG->dirroot.'/auth/saml2/classes/admin_setting_auth_saml2_button.php');
-    require_once($CFG->dirroot.'/auth/saml2/classes/admin_setting_auth_saml2_textonly.php');
     require_once($CFG->dirroot.'/auth/saml2/locallib.php');
 
     $yesno = array(
@@ -43,11 +44,7 @@ if ($ADMIN->fulltree) {
         new lang_string('auth_saml2description', 'auth_saml2')));
 
     // IDP Metadata.
-    $idpmetadata = new \auth_saml2\admin_setting_configtext_idpmetadata(
-            'auth_saml2/idpmetadata',
-            get_string('idpmetadata', 'auth_saml2'),
-            get_string('idpmetadata_help', 'auth_saml2'),
-            '', PARAM_RAW, 80, 5);
+    $idpmetadata = new \auth_saml2\admin\setting_idpmetadata();
     $idpmetadata->set_updatedcallback('auth_saml2_update_idp_metadata');
     $settings->add($idpmetadata);
 
@@ -93,7 +90,7 @@ if ($ADMIN->fulltree) {
             get_string('logdirdefault', 'auth_saml2'),
             PARAM_TEXT));
 
-    // Section 8.3 from http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
+    // See section 8.3 from http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf for more information.
     $nameidlist = [
         'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
         'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
@@ -119,7 +116,7 @@ if ($ADMIN->fulltree) {
             0, $yesno));
 
     // Lock certificate.
-    $settings->add(new admin_setting_auth_saml2_button(
+    $settings->add(new setting_button(
             'auth_saml2/certificatelock',
             get_string('certificatelock', 'auth_saml2'),
             get_string('certificatelock_help', 'auth_saml2'),
@@ -128,7 +125,7 @@ if ($ADMIN->fulltree) {
             ));
 
     // Regenerate certificate.
-    $settings->add(new admin_setting_auth_saml2_button(
+    $settings->add(new setting_button(
             'auth_saml2/certificate',
             get_string('certificate', 'auth_saml2'),
             get_string('certificate_help', 'auth_saml2', $CFG->wwwroot . '/auth/saml2/cert.php'),
@@ -137,7 +134,7 @@ if ($ADMIN->fulltree) {
             ));
 
     // SP Metadata.
-    $settings->add(new admin_setting_auth_saml2_textonly(
+    $settings->add(new setting_textonly(
            'auth_saml2/spmetadata',
            get_string('spmetadata', 'auth_saml2'),
            get_string('spmetadata_help', 'auth_saml2', $CFG->wwwroot . '/auth/saml2/sp/metadata.php')
@@ -149,6 +146,13 @@ if ($ADMIN->fulltree) {
             get_string('spmetadatasign', 'auth_saml2'),
             get_string('spmetadatasign_help', 'auth_saml2'),
             0, $yesno));
+
+    $settings->add(new admin_setting_configselect(
+        'auth_saml2/signaturealgorithm',
+        get_string('signaturealgorithm', 'auth_saml2'),
+        get_string('signaturealgorithm_help', 'auth_saml2'),
+        ssl_algorithms::get_default_saml_signature_algorithm(),
+        ssl_algorithms::get_valid_saml_signature_algorithms()));
 
     // Dual Login.
     $dualloginoptions = [
@@ -215,9 +219,30 @@ if ($ADMIN->fulltree) {
             '',
             PARAM_URL));
 
+    // Select available IdPs.
+    $settings->add(new setting_button(
+        'auth_saml2/availableidps',
+        get_string('availableidps', 'auth_saml2'),
+        get_string('availableidps_help', 'auth_saml2'),
+        get_string('availableidps', 'auth_saml2'),
+        $CFG->wwwroot . '/auth/saml2/availableidps.php'
+        ));
+
+    // Multi IdP display type.
+    $multiidpdisplayoptions = [
+        saml2_settings::OPTION_MULTI_IDP_DISPLAY_DROPDOWN => get_string('multiidpdropdown', 'auth_saml2'),
+        saml2_settings::OPTION_MULTI_IDP_DISPLAY_BUTTONS => get_string('multiidpbuttons', 'auth_saml2')
+    ];
+    $settings->add(new admin_setting_configselect(
+        'auth_saml2/multiidpdisplay',
+        get_string('multiidpdisplay', 'auth_saml2'),
+        get_string('multiidpdisplay_help', 'auth_saml2'),
+        saml2_settings::OPTION_MULTI_IDP_DISPLAY_DROPDOWN,
+        $multiidpdisplayoptions));
+
     // SAMLPHP version.
     $authplugin = get_auth_plugin('saml2');
-    $settings->add(new admin_setting_auth_saml2_textonly(
+    $settings->add(new setting_textonly(
             'auth_saml2/sspversion',
             get_string('sspversion', 'auth_saml2'),
             $authplugin->get_ssp_version()
