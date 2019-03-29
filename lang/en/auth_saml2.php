@@ -126,7 +126,7 @@ $string['no_data'] = 'No hemos podido identificarte como alumno'; //cuando no se
 $string['api_error'] = 'No se pudo conectar al servicio'; //cuando no se encontro al alumno en los atributos de respuesta de sso
 
 $string['nouser_unlp'] = "Iniciaste sesión correctamente pero tu cuenta no está asociada a Moodle con los datos de la Facultad"; // posiblemente falte idnumber en mdl_user
-$string['no_data_guarani'] = "Iniciaste sesión correctamente pero no hemos podido identificarte"; // posiblemente falte idnumber en mdl_user
+$string['no_data_guarani'] = "Iniciaste sesión correctamente pero no hemos podido identificarte"; // no se encontró en Guaraní
 $string['token_api_url_guarani'] = "Token Guaraní";
 $string['token_api_url_guarani_help'] = "Token para servicio de Guaraní";
 
