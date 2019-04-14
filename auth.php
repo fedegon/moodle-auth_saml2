@@ -437,7 +437,12 @@ class auth_plugin_saml2 extends auth_plugin_base {
 		);
 		$context = stream_context_create($options);
 		$url = "{$url}/{$unidad_academica}/{$dni_type}/{$dni_number}";
-		$page = file_get_contents($url,false,$context);
+		try { 
+			$page = file_get_contents($url,false,$context);
+		}
+		catch (Exception $e) {
+			            error_log('auth_saml2: ' . $e->getMessage());
+		}
 		return ($page!==FALSE)? json_decode($page) : $page ;
   }
   
