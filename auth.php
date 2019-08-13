@@ -505,31 +505,31 @@ class auth_plugin_saml2 extends auth_plugin_base {
         $auth->requireAuth($params);
         $attributes = $auth->getAttributes();
 
-		//UNLP atributos del sso para verificar la ua y nro_inscripcion
+        //UNLP atributos del sso para verificar la ua y nro_inscripcion
 
         list($tipo_doc,$nro_doc) = $this->person_to_doc($attributes["person"][0]);
         //nuevo llamado a la API
-		$guarani_data = $this->getDataFromService($this->config->api_url_guarani,
-												$this->config->token_api_url_guarani,
-												$this->config->unidad_academica,
-												$tipo_doc,
-												$nro_doc);
-												
-		if ($guarani_data === FALSE) { $this->error_page(get_string('api_error','auth_saml2')); }
+        $guarani_data = $this->getDataFromService($this->config->api_url_guarani,
+                                                $this->config->token_api_url_guarani,
+                                                $this->config->unidad_academica,
+                                                $tipo_doc,
+                                                $nro_doc);
+
+        if ($guarani_data === FALSE) { $this->error_page(get_string('api_error','auth_saml2')); }
         $ok=false;
-		if ($guarani_data->codigo > 0) {
+        if ($guarani_data->codigo > 0) {
                 $guarani_ua = $guarani_data->datos;
                 if ($guarani_ua->nro_inscripcion == NULL) { 
-					$this->error_page(get_string('no_data_guarani','auth_saml2'));
-				}
+                   $this->error_page(get_string('no_data_guarani','auth_saml2'));
+                }
                 else { 
-					$nro_inscripcion = $guarani_ua->nro_inscripcion; 
-					$ok=true;
-				}
+                    $nro_inscripcion = $guarani_ua->nro_inscripcion; 
+                    $ok=true;
+               }
                              
-        }    
+        }
         else {
-         echo $this->error_page(get_string('no_data','auth_saml2')); 
+                $this->error_page(get_string('no_data','auth_saml2')); 
         }
 
 
@@ -540,10 +540,10 @@ class auth_plugin_saml2 extends auth_plugin_base {
         }
         */
 
-		
 
+        
         $user = null;
-        foreach ($attributes[$attr] as $key => $uid) {
+        /*foreach ($attributes[$attr] as $key => $uid) {
             if ($this->config->tolower) {
                 $this->log(__FUNCTION__ . " to lowercase for $key => $uid");
                 $uid = strtolower($uid);
@@ -551,7 +551,7 @@ class auth_plugin_saml2 extends auth_plugin_base {
             if ($user = $DB->get_record('user', array( $this->config->mdlattr => $uid, 'deleted' => 0 ))) {
                 continue;
             }
-        }
+        }*/
 
 
 		/* obtener por nro_inscripcion */
@@ -561,20 +561,27 @@ class auth_plugin_saml2 extends auth_plugin_base {
         if ($user->suspended) {
             $this->error_page(get_string('suspendeduser', 'auth_saml2', $uid));
         }
-
+        
         $newuser = false;
         if (!$user) {
+            $username = $nro_doc;
             if ($this->config->autocreate) {
-                $this->log(__FUNCTION__ . " user '$uid' is not in moodle so autocreating");
+                $this->log(__FUNCTION__ . " user '$username' is not in moodle so autocreating");
                 if ($ok) 
                 {
-					$user = create_user_record($uid, '', 'saml2');
-					$user->idnumber=$nro_inscripcion;
-					user_update_user($user, false, false);
-					// Save custom profile fields.
-					profile_save_data($user); 
-				}
-                $newuser = true;
+                    //$user = create_user_record($uid, '', 'saml2');
+                    $user = create_user_record($username, '', 'saml2');
+                    $user->idnumber=$nro_inscripcion;
+                    user_update_user($user, false, false);
+                    // Save custom profile fields.
+                    profile_save_data($user);
+                    $newuser = true;
+                }
+                else 
+                { 
+                    $this->error_page(get_string('nouser_unlp', 'auth_saml2', $uid)); 
+                }
+                
             } else {
                 $this->log(__FUNCTION__ . " user '$uid' is not in moodle so error");
                 $this->error_page(get_string('nouser_unlp', 'auth_saml2', $uid));
